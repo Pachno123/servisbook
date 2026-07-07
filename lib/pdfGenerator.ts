@@ -539,8 +539,9 @@ async function drawProtokolPage(
   pdf.setTextColor(...NAVY)
   pdf.text('PODPIS PREVÁDZKOVATEĽA', ML, sigY + 11)
   if (data.signatureDataUrl) {
-    const dims = await fitImage(data.signatureDataUrl, 70, 22)
-    try { pdf.addImage(data.signatureDataUrl, imgFormat(data.signatureDataUrl), ML, sigY + 13, dims.w, dims.h) } catch (_e) {}
+    // Anchor signature bottom just above the line so the two never overlap.
+    const dims = await fitImage(data.signatureDataUrl, 70, 10)
+    try { pdf.addImage(data.signatureDataUrl, imgFormat(data.signatureDataUrl), ML, sigY + 23 - dims.h, dims.w, dims.h) } catch (_e) {}
   }
   pdf.setDrawColor(...MUTED)
   pdf.setLineWidth(0.3)
@@ -791,8 +792,9 @@ export async function generateOpravaPDF(data: OpravaData): Promise<Blob> {
   pdf.text('Podpis zákazníka – prebral protokol', ML, y)
   y += 2
   if (data.signatureDataUrl) {
-    const dims = await fitImage(data.signatureDataUrl, 75, 22)
-    try { pdf.addImage(data.signatureDataUrl, imgFormat(data.signatureDataUrl), ML, y, dims.w, dims.h) } catch (_e) {}
+    // Anchor signature bottom just above the line so the two never overlap.
+    const dims = await fitImage(data.signatureDataUrl, 75, 10)
+    try { pdf.addImage(data.signatureDataUrl, imgFormat(data.signatureDataUrl), ML, y + 11 - dims.h, dims.w, dims.h) } catch (_e) {}
   }
   pdf.setDrawColor(110, 110, 110)
   pdf.setLineWidth(0.3)
