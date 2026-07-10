@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Trash2, X } from 'lucide-react'
-import type { Customer, Komponent } from '@/lib/database.types'
+import type { Customer, Komponent, Ukon } from '@/lib/database.types'
 import CustomerSearch from '@/components/CustomerSearch'
 import KotolSearch from '@/components/KotolSearch'
 import { rotateCanvas90CW, normalizePhotoFile } from '@/lib/imageUtils'
@@ -11,15 +11,16 @@ import GdprModal from '@/components/GdprModal'
 import VopModal from '@/components/VopModal'
 import SignaturePad from '@/components/SignaturePad'
 
-// ----- Autocomplete for material name -----
-function MaterialInput({ value, onChange, komponenty }: {
+// ----- Generic autocomplete for name-only reference tables -----
+function AutocompleteInput({ value, onChange, suggestions, placeholder }: {
   value: string
   onChange: (v: string) => void
-  komponenty: Komponent[]
+  suggestions: { id: number; nazov: string }[]
+  placeholder: string
 }) {
   const [open, setOpen] = useState(false)
   const filtered = value.length > 0
-    ? komponenty.filter(k => k.nazov.toLowerCase().includes(value.toLowerCase()))
+    ? suggestions.filter(k => k.nazov.toLowerCase().includes(value.toLowerCase()))
     : []
 
   return (
@@ -30,7 +31,7 @@ function MaterialInput({ value, onChange, komponenty }: {
         onChange={e => { onChange(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        placeholder="Názov materiálu"
+        placeholder={placeholder}
         style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 13px', fontSize: '15px', color: '#0f172a', outline: 'none', background: '#fff', boxShadow: '0 1px 2px rgba(15,23,42,0.04)' }}
       />
       {open && filtered.length > 0 && (
@@ -59,6 +60,7 @@ export default function OpravaForm() {
   const [mounted, setMounted] = useState(false)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [komponenty, setKomponenty] = useState<Komponent[]>([])
+  const [ukonyDb, setUkonyDb] = useState<Ukon[]>([])
   const [selectedCustomerId, setSelectedCustomerId] = useState(customerId || '')
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [saving, setSaving] = useState(false)
@@ -110,6 +112,7 @@ export default function OpravaForm() {
     setMounted(true)
     fetch('/api/customers').then(r => r.json()).then(setCustomers).catch(() => {})
     fetch('/api/komponenty').then(r => r.json()).then(setKomponenty).catch(() => {})
+    fetch('/api/ukony').then(r => r.json()).then(setUkonyDb).catch(() => {})
     const year = new Date().getFullYear()
     const rand = Math.floor(Math.random() * 900) + 100
     setServisnyListCislo(`SL-${year}-${rand}`)
@@ -125,6 +128,23 @@ export default function OpravaForm() {
       setCustomer(null)
     }
   }, [selectedCustomerId])
+
+  // Learn new reference-list entries so the autocomplete gets richer over time.
+  // Silent: any 400/500 is ignored — the oprava itself has already been saved.
+  async function learnReferences() {
+    const knownMaterial = new Set(komponenty.map(k => k.nazov.toLowerCase()))
+    const knownUkony = new Set(ukonyDb.map(u => u.nazov.toLowerCase()))
+    const newMaterial = material.map(m => m.trim()).filter(m => m && !knownMaterial.has(m.toLowerCase()))
+    const newUkony = ukony.map(u => u.trim()).filter(u => u && !knownUkony.has(u.toLowerCase()))
+    await Promise.all([
+      ...newMaterial.map(nazov =>
+        fetch('/api/komponenty', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nazov }) }).catch(() => {})
+      ),
+      ...newUkony.map(nazov =>
+        fetch('/api/ukony', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nazov }) }).catch(() => {})
+      ),
+    ])
+  }
 
   function buildBody() {
     return {
@@ -156,6 +176,7 @@ export default function OpravaForm() {
           await Promise.all(photos.map((f, i) => uploadPhotoToStorage(f, 'opravy', String(oprava.id), i)))
         } catch (e) { console.error('[opravy] photo upload error:', e) }
       }
+      learnReferences()
       setSaved(true)
       setTimeout(() => router.push('/dashboard/zakaznici'), 1500)
     }
@@ -174,6 +195,7 @@ export default function OpravaForm() {
     })
     if (!res.ok) { setSending(false); setSendStatus(''); return }
     const oprava = await res.json()
+    learnReferences()
 
     setSendStatus('Nahrávam fotky...')
     if (photos.length > 0) {
@@ -396,10 +418,11 @@ export default function OpravaForm() {
           </div>
           {material.map((nazov, i) => (
             <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-              <MaterialInput
+              <AutocompleteInput
                 value={nazov}
                 onChange={v => setMaterial(prev => prev.map((r, idx) => idx === i ? v : r))}
-                komponenty={komponenty}
+                suggestions={komponenty}
+                placeholder="Názov materiálu"
               />
               <button onClick={() => setMaterial(prev => prev.filter((_, idx) => idx !== i))}
                 style={{ background: '#fef2f2', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#dc2626', padding: '9px 8px', flexShrink: 0 }}>
@@ -420,12 +443,12 @@ export default function OpravaForm() {
           </div>
           {ukony.map((nazov, i) => (
             <div key={i} style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-              <input type="text" value={nazov}
-                onChange={e => setUkony(prev => prev.map((r, idx) => idx === i ? e.target.value : r))}
+              <AutocompleteInput
+                value={nazov}
+                onChange={v => setUkony(prev => prev.map((r, idx) => idx === i ? v : r))}
+                suggestions={ukonyDb}
                 placeholder="Názov úkonu"
-                style={{ ...s.inp, flex: 1 }}
-                onFocus={e => (e.target.style.borderColor = '#2563eb')}
-                onBlur={e => (e.target.style.borderColor = '#e2e8f0')} />
+              />
               <button onClick={() => setUkony(prev => prev.filter((_, idx) => idx !== i))}
                 style={{ background: '#fef2f2', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#dc2626', padding: '9px 8px', flexShrink: 0 }}>
                 <Trash2 size={15} />

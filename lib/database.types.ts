@@ -146,6 +146,21 @@ export interface Database {
           nazov?: string
         }
       }
+      ukony: {
+        Row: {
+          id: number
+          nazov: string
+          created_at: string
+        }
+        Insert: {
+          id?: never
+          nazov: string
+          created_at?: string
+        }
+        Update: {
+          nazov?: string
+        }
+      }
       revizie: {
         Row: {
           id: number
@@ -279,6 +294,7 @@ export type CustomerUpdate = Database['public']['Tables']['customers']['Update']
 
 export type Kotol = Database['public']['Tables']['kotle']['Row']
 export type Komponent = Database['public']['Tables']['komponenty']['Row']
+export type Ukon = Database['public']['Tables']['ukony']['Row']
 
 export type Revizia = Database['public']['Tables']['revizie']['Row']
 export type ReviziaInsert = Database['public']['Tables']['revizie']['Insert']
