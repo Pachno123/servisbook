@@ -1,4 +1,4 @@
-const CACHE_NAME = 'servisbook-v20'
+const CACHE_NAME = 'servisbook-v21'
 
 // Resources to pre-cache on install — cover the main tabs so second visit is instant.
 const PRECACHE_URLS = [

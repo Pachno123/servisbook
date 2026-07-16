@@ -11,12 +11,7 @@ interface SignaturePadProps {
   label?: string
 }
 
-// Internal canvas resolution. Aspect-agnostic — bounds-cropping at export time
-// yields a tight image whose ratio matches what was actually drawn.
-const CW = 2400
-const CH = 1200
 const STROKE_COLOR = '#1a1a1a'
-const STROKE_WIDTH = 4
 
 export default function SignaturePad({ value, onChange, label = 'Podpis zákazníka' }: SignaturePadProps) {
   const [open, setOpen] = useState(false)
@@ -65,7 +60,6 @@ export default function SignaturePad({ value, onChange, label = 'Podpis zákazn�
 
       {open && (
         <SignatureOverlay
-          initialDataUrl={value}
           onCancel={() => setOpen(false)}
           onDone={(dataUrl) => { onChange(dataUrl); setOpen(false) }}
         />
@@ -75,28 +69,31 @@ export default function SignaturePad({ value, onChange, label = 'Podpis zákazn�
 }
 
 // ── Fullscreen overlay ──────────────────────────────────────────────────────
+//
+// The canvas backing store is sized to its rendered CSS box × devicePixelRatio.
+// That keeps the drawing aspect ratio 1:1 with the screen — a stroke drawn as
+// a square on-glass stays a square in the exported PNG. Previously we used a
+// fixed 2400×1200 backing store, which stretched every vertical stroke into
+// a much shorter one on a portrait phone.
 
 function SignatureOverlay({
-  initialDataUrl,
   onCancel,
   onDone,
 }: {
-  initialDataUrl: string | null
   onCancel: () => void
   onDone: (dataUrl: string) => void
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const isDrawingRef = useRef(false)
   const lastPosRef = useRef<{ x: number; y: number } | null>(null)
   const boundsRef = useRef<Bounds | null>(null)
+  const dprRef = useRef(1)
   const [empty, setEmpty] = useState(true)
-  // Track viewport orientation so we can hint the user to rotate. Once the PWA
-  // manifest "orientation: any" rolls out, the overlay re-layouts naturally
-  // when the phone is rotated to landscape; until then (iOS until the user
-  // re-adds to home screen) we just show a hint.
   const [isPortrait, setIsPortrait] = useState(
     typeof window !== 'undefined' ? window.innerHeight > window.innerWidth : false,
   )
+
   useEffect(() => {
     const onResize = () => setIsPortrait(window.innerHeight > window.innerWidth)
     window.addEventListener('resize', onResize)
@@ -107,34 +104,24 @@ function SignatureOverlay({
     }
   }, [])
 
-  // Initialise canvas resolution + redraw previous signature (if any).
+  // Size the canvas backing store to its rendered box. Runs once — on rotate
+  // the user has to redraw, but the ratio is always 1:1 with the screen.
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
-    canvas.width = CW
-    canvas.height = CH
-    if (initialDataUrl) {
-      const img = new Image()
-      img.onload = () => {
-        const ctx = canvas.getContext('2d')!
-        // Center previous signature in the canvas at its natural ratio.
-        const scale = Math.min(CW / img.naturalWidth, CH / img.naturalHeight) * 0.9
-        const dw = img.naturalWidth * scale
-        const dh = img.naturalHeight * scale
-        const dx = (CW - dw) / 2
-        const dy = (CH - dh) / 2
-        ctx.drawImage(img, dx, dy, dw, dh)
-        boundsRef.current = { minX: dx, minY: dy, maxX: dx + dw, maxY: dy + dh }
-        setEmpty(false)
-      }
-      img.src = initialDataUrl
-    }
-  }, [initialDataUrl])
+    const wrapper = wrapperRef.current
+    if (!canvas || !wrapper) return
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    dprRef.current = dpr
+    const rect = wrapper.getBoundingClientRect()
+    canvas.width = Math.round(rect.width * dpr)
+    canvas.height = Math.round(rect.height * dpr)
+  }, [isPortrait])
 
-  // Native touch handlers — passive: false so preventDefault() blocks page scroll.
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
+
+    const strokeWidth = 3 * dprRef.current
 
     const getPosFromXY = (clientX: number, clientY: number) => {
       const rect = canvas.getBoundingClientRect()
@@ -159,7 +146,7 @@ function SignatureOverlay({
       ctx.moveTo(from.x, from.y)
       ctx.lineTo(to.x, to.y)
       ctx.strokeStyle = STROKE_COLOR
-      ctx.lineWidth = STROKE_WIDTH
+      ctx.lineWidth = strokeWidth
       ctx.lineCap = 'round'
       ctx.lineJoin = 'round'
       ctx.stroke()
@@ -215,7 +202,7 @@ function SignatureOverlay({
       canvas.removeEventListener('mouseup', onMouseUp)
       canvas.removeEventListener('mouseleave', onMouseUp)
     }
-  }, [])
+  }, [isPortrait])
 
   const clear = () => {
     const canvas = canvasRef.current
@@ -230,8 +217,9 @@ function SignatureOverlay({
     if (!canvas) return
     if (empty || !boundsRef.current) { onCancel(); return }
 
-    // Crop to actual drawn bounds + padding so the PDF embeds with correct aspect.
-    const pad = 60
+    // Crop to actual drawn bounds + small padding. Padding scales with stroke
+    // so a small signature isn't drowned in whitespace when embedded in PDF.
+    const pad = 12 * dprRef.current
     const b = boundsRef.current
     const x = Math.max(0, Math.floor(b.minX - pad))
     const y = Math.max(0, Math.floor(b.minY - pad))
@@ -278,7 +266,7 @@ function SignatureOverlay({
         </div>
       )}
 
-      <div style={{ flex: 1, padding: 12, position: 'relative' }}>
+      <div ref={wrapperRef} style={{ flex: 1, padding: 12, position: 'relative' }}>
         <canvas
           ref={canvasRef}
           style={{
