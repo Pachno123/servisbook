@@ -234,6 +234,33 @@ function SignatureOverlay({
     onDone(out.toDataURL('image/png'))
   }
 
+  const btnClear = (
+    <button
+      type="button"
+      onClick={clear}
+      style={{
+        background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: 12,
+        padding: '14px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
+      }}
+    >
+      Vymazať
+    </button>
+  )
+  const btnDone = (
+    <button
+      type="button"
+      onClick={done}
+      disabled={empty}
+      style={{
+        background: empty ? '#475569' : '#2563eb', color: '#fff', border: 'none', borderRadius: 12,
+        padding: '14px', fontSize: 15, fontWeight: 600,
+        cursor: empty ? 'not-allowed' : 'pointer', opacity: empty ? 0.6 : 1,
+      }}
+    >
+      Hotovo
+    </button>
+  )
+
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 1000,
@@ -266,51 +293,53 @@ function SignatureOverlay({
         </div>
       )}
 
-      <div ref={wrapperRef} style={{ flex: 1, padding: 12, position: 'relative' }}>
-        <canvas
-          ref={canvasRef}
-          style={{
-            width: '100%', height: '100%', display: 'block',
-            background: '#fff', borderRadius: 12, touchAction: 'none', cursor: 'crosshair',
-          }}
-        />
-        {empty && (
+      {/* Body: canvas + action buttons. In portrait the buttons sit below the
+          canvas; in landscape they move to a narrow right column so the pad
+          keeps the full screen height and the buttons stay reachable without
+          overlapping the drawing surface. */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: isPortrait ? 'column' : 'row',
+        minHeight: 0,
+      }}>
+        <div ref={wrapperRef} style={{ flex: 1, padding: 12, position: 'relative', minHeight: 0, minWidth: 0 }}>
+          <canvas
+            ref={canvasRef}
+            style={{
+              width: '100%', height: '100%', display: 'block',
+              background: '#fff', borderRadius: 12, touchAction: 'none', cursor: 'crosshair',
+            }}
+          />
+          {empty && (
+            <div style={{
+              position: 'absolute', inset: 12,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              pointerEvents: 'none', color: '#cbd5e1', fontSize: 16,
+            }}>
+              Podpíšte sa prstom alebo myšou
+            </div>
+          )}
+        </div>
+
+        {isPortrait ? (
           <div style={{
-            position: 'absolute', inset: 12,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            pointerEvents: 'none', color: '#cbd5e1', fontSize: 16,
+            padding: '12px 16px 20px',
+            display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10,
           }}>
-            Podpíšte sa prstom alebo myšou
+            {btnClear}
+            {btnDone}
+          </div>
+        ) : (
+          <div style={{
+            padding: '12px 16px 12px 0',
+            display: 'flex', flexDirection: 'column', gap: 10,
+            width: 160, flexShrink: 0, justifyContent: 'flex-end',
+          }}>
+            {btnClear}
+            {btnDone}
           </div>
         )}
-      </div>
-
-      <div style={{
-        padding: '12px 16px 20px',
-        display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 10,
-      }}>
-        <button
-          type="button"
-          onClick={clear}
-          style={{
-            background: 'rgba(255,255,255,0.1)', color: '#fff', border: 'none', borderRadius: 12,
-            padding: '14px', fontSize: 15, fontWeight: 600, cursor: 'pointer',
-          }}
-        >
-          Vymazať
-        </button>
-        <button
-          type="button"
-          onClick={done}
-          disabled={empty}
-          style={{
-            background: empty ? '#475569' : '#2563eb', color: '#fff', border: 'none', borderRadius: 12,
-            padding: '14px', fontSize: 15, fontWeight: 600,
-            cursor: empty ? 'not-allowed' : 'pointer', opacity: empty ? 0.6 : 1,
-          }}
-        >
-          Hotovo
-        </button>
       </div>
     </div>
   )
