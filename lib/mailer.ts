@@ -1,21 +1,19 @@
-import nodemailer from 'nodemailer'
+import { Resend } from 'resend'
 
-let _transporter: nodemailer.Transporter | null = null
+// Resend sending domain verified 2026-07-19: revitherm.sk (eu-west-1).
+// From address defaults to noreply@revitherm.sk unless RESEND_FROM_ADDRESS
+// overrides it (e.g. a per-tenant address in a future multi-tenant setup).
+const FROM_ADDRESS = process.env.RESEND_FROM_ADDRESS || 'noreply@revitherm.sk'
+const REPLY_TO_FALLBACK = process.env.RESEND_REPLY_TO || undefined
 
-function getTransporter(): nodemailer.Transporter {
-  if (_transporter) return _transporter
-  const user = process.env.GMAIL_USER
-  // Google displays the app password with spaces but the SMTP accepts the joined form.
-  // Strip whitespace so users don't have to worry about copy/paste artifacts.
-  const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, '')
-  if (!user || !pass) {
-    throw new Error('GMAIL_USER and GMAIL_APP_PASSWORD env vars are required for sending email')
-  }
-  _transporter = nodemailer.createTransport({
-    service: 'gmail',
-    auth: { user, pass },
-  })
-  return _transporter
+let _resend: Resend | null = null
+
+function getClient(): Resend {
+  if (_resend) return _resend
+  const key = process.env.RESEND_API_KEY
+  if (!key) throw new Error('RESEND_API_KEY env var is required for sending email')
+  _resend = new Resend(key)
+  return _resend
 }
 
 export interface MailOptions {
@@ -23,7 +21,7 @@ export interface MailOptions {
   subject: string
   html: string
   replyTo?: string
-  /** Display name shown before the actual <gmail-address>. e.g. "Revitherm | Gas service" */
+  /** Display name shown before the From address. e.g. "Revitherm | Servis kotlov" */
   fromName?: string
   attachments?: Array<{
     filename: string
@@ -42,24 +40,33 @@ export interface MailResult {
 
 export async function sendMail(opts: MailOptions): Promise<MailResult> {
   try {
-    const transporter = getTransporter()
-    const gmailUser = process.env.GMAIL_USER!
-    const fromName = (opts.fromName || 'ServisBook').trim()
-    const from = `"${fromName.replace(/"/g, '')}" <${gmailUser}>`
+    const resend = getClient()
+    const fromName = (opts.fromName || 'ServisBook').trim().replace(/"/g, '')
+    const from = `${fromName} <${FROM_ADDRESS}>`
 
-    const info = await transporter.sendMail({
+    const attachments = opts.attachments?.map(a => ({
+      filename: a.filename,
+      // Resend accepts either a Buffer directly or a base64 string; nodemailer's
+      // dual-form API let callers pass raw strings, so keep the same contract.
+      content: a.encoding === 'base64' && typeof a.content === 'string'
+        ? Buffer.from(a.content, 'base64')
+        : a.content,
+    }))
+
+    const { data, error } = await resend.emails.send({
       from,
       to: Array.isArray(opts.to) ? opts.to : [opts.to],
       subject: opts.subject,
       html: opts.html,
-      replyTo: opts.replyTo,
-      attachments: opts.attachments?.map(a => ({
-        filename: a.filename,
-        content: a.content,
-        ...(a.encoding ? { encoding: a.encoding } : {}),
-      })),
+      reply_to: opts.replyTo || REPLY_TO_FALLBACK,
+      attachments,
     })
-    return { ok: true, messageId: info.messageId }
+
+    if (error) {
+      console.error('[mailer] resend error:', error)
+      return { ok: false, error: error.message }
+    }
+    return { ok: true, messageId: data?.id }
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e)
     console.error('[mailer] send failed:', msg)
