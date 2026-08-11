@@ -342,6 +342,43 @@ export default function CustomerDetail({ customer, onClose, onEdit, onDelete }: 
                   </div>
                 )}
               </div>
+
+              {/* GDPR consent */}
+              {customer.gdpr_consent && (
+                <div style={{
+                  marginTop: 4, padding: '12px 14px',
+                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: customer.gdpr_signature ? 10 : 0 }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%', background: '#16a34a',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                    }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </div>
+                    <div style={{ fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
+                      <strong style={{ fontWeight: 700 }}>Súhlasil s GDPR</strong>
+                      {customer.gdpr_consent_date && (
+                        <span style={{ color: '#15803d' }}> · {formatDate(customer.gdpr_consent_date)}</span>
+                      )}
+                    </div>
+                  </div>
+                  {customer.gdpr_signature && (
+                    <div style={{
+                      background: '#fff', border: '1px solid #d1fae5', borderRadius: 8,
+                      padding: 8, display: 'flex', justifyContent: 'center',
+                    }}>
+                      <img
+                        src={customer.gdpr_signature}
+                        alt="Podpis zákazníka"
+                        style={{ maxWidth: '100%', maxHeight: 90, objectFit: 'contain' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Action buttons */}
