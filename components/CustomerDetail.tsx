@@ -184,6 +184,7 @@ export default function CustomerDetail({ customer, onClose, onEdit, onDelete }: 
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [historyLoading, setHistoryLoading] = useState(true)
   const [selectedRecord, setSelectedRecord] = useState<HistoryItem | null>(null)
+  const [showGdpr, setShowGdpr] = useState(false)
 
   useEffect(() => {
     async function load() {
@@ -266,12 +267,28 @@ export default function CustomerDetail({ customer, onClose, onEdit, onDelete }: 
           <>
             {/* Header */}
             <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              display: 'flex', alignItems: 'center', gap: 8,
               padding: '12px 16px 14px', borderBottom: '1px solid #f1f5f9',
             }}>
-              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: '12px', letterSpacing: '-0.01em' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 700, color: '#0f172a', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                 {customer.nazov}
               </h2>
+              <button
+                onClick={() => setShowGdpr(true)}
+                style={{
+                  background: customer.gdpr_consent ? '#f0fdf4' : '#f1f5f9',
+                  border: `1px solid ${customer.gdpr_consent ? '#bbf7d0' : '#e2e8f0'}`,
+                  color: customer.gdpr_consent ? '#166534' : '#64748b',
+                  borderRadius: 20, padding: '6px 12px',
+                  fontSize: 12, fontWeight: 700, letterSpacing: '0.03em',
+                  cursor: 'pointer', flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 5,
+                }}
+                aria-label="Zobraziť GDPR súhlas"
+              >
+                {customer.gdpr_consent && <span style={{ fontSize: 11 }}>✓</span>}
+                GDPR
+              </button>
               <button onClick={onClose} style={{
                 background: '#f1f5f9', border: 'none', borderRadius: 10,
                 width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -343,42 +360,6 @@ export default function CustomerDetail({ customer, onClose, onEdit, onDelete }: 
                 )}
               </div>
 
-              {/* GDPR consent */}
-              {customer.gdpr_consent && (
-                <div style={{
-                  marginTop: 4, padding: '12px 14px',
-                  background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 12,
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: customer.gdpr_signature ? 10 : 0 }}>
-                    <div style={{
-                      width: 22, height: 22, borderRadius: '50%', background: '#16a34a',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    }}>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                      </svg>
-                    </div>
-                    <div style={{ fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
-                      <strong style={{ fontWeight: 700 }}>Súhlasil s GDPR</strong>
-                      {customer.gdpr_consent_date && (
-                        <span style={{ color: '#15803d' }}> · {formatDate(customer.gdpr_consent_date)}</span>
-                      )}
-                    </div>
-                  </div>
-                  {customer.gdpr_signature && (
-                    <div style={{
-                      background: '#fff', border: '1px solid #d1fae5', borderRadius: 8,
-                      padding: 8, display: 'flex', justifyContent: 'center',
-                    }}>
-                      <img
-                        src={customer.gdpr_signature}
-                        alt="Podpis zákazníka"
-                        style={{ maxWidth: '100%', maxHeight: 90, objectFit: 'contain' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* Action buttons */}
@@ -486,6 +467,106 @@ export default function CustomerDetail({ customer, onClose, onEdit, onDelete }: 
           </>
         )}
       </div>
+
+      {/* GDPR modal */}
+      {showGdpr && (
+        <div
+          onClick={(e) => { e.stopPropagation(); setShowGdpr(false) }}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(15,23,42,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: '#fff', borderRadius: 16, maxWidth: 420, width: '100%',
+              padding: '20px 20px 18px', boxShadow: '0 20px 60px rgba(0,0,0,0.25)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#0f172a' }}>
+                GDPR súhlas
+              </h3>
+              <button
+                onClick={() => setShowGdpr(false)}
+                style={{
+                  background: '#f1f5f9', border: 'none', borderRadius: 8,
+                  width: 32, height: 32, cursor: 'pointer', color: '#64748b',
+                  fontSize: 18, lineHeight: 1,
+                }}
+              >×</button>
+            </div>
+
+            <p style={{ margin: '0 0 12px', fontSize: 13, color: '#64748b' }}>
+              Zákazník: <strong style={{ color: '#0f172a' }}>{customer.nazov}</strong>
+            </p>
+
+            {customer.gdpr_consent ? (
+              <>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '12px 14px', background: '#f0fdf4',
+                  border: '1px solid #bbf7d0', borderRadius: 12, marginBottom: 12,
+                }}>
+                  <div style={{
+                    width: 26, height: 26, borderRadius: '50%', background: '#16a34a',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                  </div>
+                  <div style={{ fontSize: 13, color: '#166534', lineHeight: 1.4 }}>
+                    <div style={{ fontWeight: 700 }}>Súhlasil so spracovaním osobných údajov</div>
+                    {customer.gdpr_consent_date && (
+                      <div style={{ color: '#15803d', marginTop: 2 }}>
+                        Dňa {formatDate(customer.gdpr_consent_date)}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {customer.gdpr_signature ? (
+                  <div>
+                    <p style={{ margin: '0 0 6px', fontSize: '11px', fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                      Podpis zákazníka
+                    </p>
+                    <div style={{
+                      background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10,
+                      padding: 12, display: 'flex', justifyContent: 'center',
+                    }}>
+                      <img
+                        src={customer.gdpr_signature}
+                        alt="Podpis zákazníka"
+                        style={{ maxWidth: '100%', maxHeight: 160, objectFit: 'contain' }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{
+                    margin: 0, padding: '10px 12px',
+                    background: '#fefce8', border: '1px solid #fef08a', borderRadius: 10,
+                    fontSize: 12, color: '#854d0e', lineHeight: 1.5,
+                  }}>
+                    Bez elektronického podpisu — súhlas bol udelený papierovo alebo pred zavedením podpisu v aplikácii.
+                  </p>
+                )}
+              </>
+            ) : (
+              <div style={{
+                padding: '12px 14px', background: '#fef2f2',
+                border: '1px solid #fecaca', borderRadius: 12,
+                fontSize: 13, color: '#991b1b',
+              }}>
+                Zákazník zatiaľ <strong>neudelil</strong> GDPR súhlas.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
