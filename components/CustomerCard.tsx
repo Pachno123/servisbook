@@ -151,6 +151,15 @@ export default function CustomerCard({ customer, onClick, lastReviziaDate, nextS
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Name + status badge */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', marginBottom: '3px', flexWrap: 'wrap' }}>
+            <span
+              title={customer.gdpr_consent ? 'GDPR súhlas udelený' : 'GDPR súhlas chýba'}
+              style={{
+                width: 9, height: 9, borderRadius: '50%',
+                background: customer.gdpr_consent ? '#22c55e' : '#ef4444',
+                boxShadow: `0 0 0 2px ${customer.gdpr_consent ? '#22c55e33' : '#ef444433'}`,
+                flexShrink: 0,
+              }}
+            />
             <span style={{
               fontSize: '14.5px', fontWeight: 700, color: '#0f172a',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
