@@ -7,6 +7,8 @@ interface HistoriaItem {
   id: number
   typ: 'revizia' | 'oprava'
   datum: string
+  user_id?: string | null
+  technicianName?: string
   customers: {
     id: number
     nazov: string
@@ -24,6 +26,12 @@ interface HistoriaItem {
   servisny_list_cislo?: string
   material?: unknown
   ukony?: unknown
+}
+
+interface TeamMember {
+  user_id: string
+  full_name: string | null
+  email: string | null
 }
 
 function formatDate(str: string): string {
@@ -300,20 +308,40 @@ function OpravaDetail({ item }: { item: HistoriaItem }) {
   )
 }
 
+function displayTechName(m: TeamMember): string {
+  const name = (m.full_name || '').trim()
+  if (name) return name
+  const email = (m.email || '').trim()
+  if (email) return email.split('@')[0]
+  return 'Technik'
+}
+
 export default function HistoriaPage() {
   const [items, setItems] = useState<HistoriaItem[]>([])
   const [filtered, setFiltered] = useState<HistoriaItem[]>([])
   const [search, setSearch] = useState('')
+  const [technicianId, setTechnicianId] = useState<string>('all')
+  const [team, setTeam] = useState<TeamMember[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<HistoriaItem | null>(null)
 
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const [revRes, oprRes] = await Promise.all([
+      const [revRes, oprRes, teamRes] = await Promise.all([
         fetch('/api/revizie'),
         fetch('/api/opravy'),
+        fetch('/api/team'),
       ])
+
+      let teamList: TeamMember[] = []
+      if (teamRes.ok) {
+        teamList = await teamRes.json()
+        setTeam(teamList)
+      }
+      const nameById = new Map<string, string>()
+      for (const m of teamList) nameById.set(m.user_id, displayTechName(m))
+
       const combined: HistoriaItem[] = []
       if (revRes.ok) {
         const revData = await revRes.json()
@@ -323,6 +351,8 @@ export default function HistoriaPage() {
             typ: 'revizia',
             datum: r.datum || r.created_at,
             customers: r.customers,
+            user_id: r.user_id,
+            technicianName: r.user_id ? nameById.get(r.user_id) : undefined,
             checks: r.checks,
             poznamka: r.poznamka,
           })
@@ -336,6 +366,8 @@ export default function HistoriaPage() {
             typ: 'oprava',
             datum: o.datum_vyjazdu || o.created_at,
             customers: o.customers,
+            user_id: o.user_id,
+            technicianName: o.user_id ? nameById.get(o.user_id) : undefined,
             nahlasena_porucha: o.nahlasena_porucha,
             diagnostika: o.diagnostika,
             odstranenie: o.odstranenie,
@@ -357,12 +389,15 @@ export default function HistoriaPage() {
 
   useEffect(() => {
     const q = search.toLowerCase()
-    if (!q) { setFiltered(items); return }
     setFiltered(items.filter((item) => {
-      const name = item.customers?.nazov?.toLowerCase() || ''
-      return name.includes(q)
+      if (technicianId !== 'all' && item.user_id !== technicianId) return false
+      if (q) {
+        const name = item.customers?.nazov?.toLowerCase() || ''
+        if (!name.includes(q)) return false
+      }
+      return true
     }))
-  }, [search, items])
+  }, [search, items, technicianId])
 
   return (
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -385,6 +420,42 @@ export default function HistoriaPage() {
           }}
         />
       </div>
+
+      {/* Technician filter — only shown when there's more than 1 technician */}
+      {team.length > 1 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+            Technik
+          </label>
+          <div style={{ position: 'relative' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+            </svg>
+            <select
+              value={technicianId}
+              onChange={(e) => setTechnicianId(e.target.value)}
+              style={{
+                width: '100%', boxSizing: 'border-box',
+                border: '1.5px solid #e5e7eb', borderRadius: 10,
+                paddingLeft: 36, paddingRight: 36, paddingTop: 12, paddingBottom: 12,
+                fontSize: 15, color: '#111827', background: '#fff', outline: 'none',
+                appearance: 'none', WebkitAppearance: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="all">Všetci technici</option>
+              {team.map((m) => (
+                <option key={m.user_id} value={m.user_id}>{displayTechName(m)}</option>
+              ))}
+            </select>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </div>
+        </div>
+      )}
 
       {/* List */}
       {loading ? (
@@ -410,7 +481,7 @@ export default function HistoriaPage() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '10px' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
                     <span style={{
                       fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '20px',
                       background: item.typ === 'revizia' ? '#dbeafe' : '#fff7ed',
@@ -419,6 +490,18 @@ export default function HistoriaPage() {
                       {item.typ === 'revizia' ? 'Revízia' : 'Oprava'}
                     </span>
                     <span style={{ fontSize: '13px', color: '#6b7280' }}>{formatDate(item.datum)}</span>
+                    {item.technicianName && team.length > 1 && (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        fontSize: '11px', fontWeight: 600, padding: '2px 8px', borderRadius: '20px',
+                        background: '#f1f5f9', color: '#475569',
+                      }}>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" />
+                        </svg>
+                        {item.technicianName}
+                      </span>
+                    )}
                   </div>
                   <p style={{ margin: '0 0 3px', fontSize: '15px', fontWeight: 700, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {item.customers?.nazov || '—'}
